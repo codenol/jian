@@ -33,7 +33,9 @@ pub mod variable;
 pub mod version;
 
 pub use compat::load_str;
-pub use design_md::{DesignMdColor, DesignMdSpec, DesignMdTypography};
+pub use design_md::{
+    DesignMdColor, DesignMdSpec, DesignMdTypography, DesignRule, DesignRuleKind, DesignRuleScope,
+};
 pub use document::PenDocument;
 pub use error::{LoadResult, LoadWarning, OpsResult, OpsSchemaError};
 

@@ -39,6 +39,75 @@ pub struct DesignMdSpec {
 
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub generation_notes: Option<String>,
+
+    /// Structured document-local design rules and overrides.
+    ///
+    /// Library rules are resolved by the editor at runtime. A rule whose
+    /// `overrides` field names a library rule replaces (or disables) it for
+    /// this document without mutating the source component library.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub rules: Vec<DesignRule>,
+}
+
+/// The strength and polarity of a design rule.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+#[cfg_attr(feature = "export-ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "export-ts", ts(export, export_to = "ops.ts"))]
+#[serde(rename_all = "camelCase")]
+pub enum DesignRuleKind {
+    Do,
+    Dont,
+    Require,
+    Avoid,
+}
+
+/// The design objects to which a rule applies.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+#[cfg_attr(feature = "export-ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "export-ts", ts(export, export_to = "ops.ts"))]
+#[serde(tag = "type", rename_all = "camelCase")]
+pub enum DesignRuleScope {
+    Global,
+    ComponentType {
+        #[serde(rename = "kitId")]
+        kit_id: String,
+        #[serde(rename = "typeId")]
+        type_id: String,
+    },
+    ComponentMaster {
+        #[serde(rename = "componentId")]
+        component_id: String,
+    },
+    /// A shipped recipe — a pre-composed screen the AI starts from.
+    Recipe {
+        #[serde(rename = "recipeId")]
+        recipe_id: String,
+    },
+}
+
+/// One structured, AI-readable design rule.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+#[cfg_attr(feature = "export-ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "export-ts", ts(export, export_to = "ops.ts"))]
+#[serde(rename_all = "camelCase")]
+pub struct DesignRule {
+    pub id: String,
+    pub title: String,
+    pub instruction: String,
+    pub kind: DesignRuleKind,
+    pub scope: DesignRuleScope,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub condition: Option<String>,
+    #[serde(default)]
+    pub priority: i32,
+    #[serde(default = "default_rule_enabled")]
+    pub enabled: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub overrides: Option<String>,
+}
+
+fn default_rule_enabled() -> bool {
+    true
 }
 
 /// One named colour from the design-md colour palette.
@@ -97,6 +166,7 @@ mod tests {
             component_styles: None,
             layout_principles: None,
             generation_notes: None,
+            rules: Vec::new(),
         };
         let json = serde_json::to_string(&spec).unwrap();
         let back: DesignMdSpec = serde_json::from_str(&json).unwrap();
@@ -104,5 +174,23 @@ mod tests {
         // Optional empty fields are omitted from the wire form.
         assert!(!json.contains("componentStyles"));
         assert!(json.contains("\"projectName\":\"Demo\""));
+    }
+
+    #[test]
+    fn old_design_md_json_defaults_rules_to_empty() {
+        let spec: DesignMdSpec = serde_json::from_str(r##"{"raw":"# Demo"}"##).unwrap();
+        assert!(spec.rules.is_empty());
+    }
+
+    #[test]
+    fn rule_defaults_keep_old_writers_concise() {
+        let rule: DesignRule = serde_json::from_str(
+            r#"{"id":"r1","title":"Use Button","instruction":"Use the kit button","kind":"require","scope":{"type":"global"}}"#,
+        )
+        .unwrap();
+        assert!(rule.enabled);
+        assert_eq!(rule.priority, 0);
+        assert_eq!(rule.condition, None);
+        assert_eq!(rule.overrides, None);
     }
 }
